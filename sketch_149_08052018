@@ -1,0 +1,240 @@
+#include <Adafruit_NeoPixel.h>
+#include <stdlib.h>
+#include <NewPing.h>
+#include "Wire.h"
+
+#define L_STRIP_PORT 19
+#define R_STRIP_PORT 20
+#define L_LEDS 129 // // How many NeoPixels are attached to the Arduino Left Strip
+#define R_LEDS 185 // How many NeoPixels are attached to the Arduino Right Strip
+
+int IR_SENSORS[15] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+
+#define IR_SENSOR[2] 3;
+#define IR_SENSOR[3] 4;
+#define IR_SENSOR[5] 6;
+#define IR_SENSOR[6] 7;
+#define IR_SENSOR[7] 8;
+#define IR_SENSOR[8] 9;
+#define IR_SENSOR[9] 10;
+#define IR_SENSOR[12] 13;
+#define IR_SENSOR[13] 14;
+
+#define DEBUG 1
+ 
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+
+Adafruit_NeoPixel L_STRIP = Adafruit_NeoPixel(L_LEDS, L_STRIP_PORT, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel R_STRIP = Adafruit_NeoPixel(R_LEDS, R_STRIP_PORT, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel STRIP;
+
+
+// Left side strip: 9 leds for each step (except steps #1 and #3)
+int L_STEPS[] = {24, 33, 42, 55, 64, 73, 82, 91, 100, 109, 118, 127, 136, 145};
+
+// Right side strip: 9 leds for each step (except steps #1 and #3)
+int R_STEPS[] = {5, 14, 74, 83, 92, 101, 110, 119, 128, 137, 146, 155, 164, 173};
+
+int BRIGHT[] = {0, 2, 7, 12, 20, 30, 40, 50, 60, 70, 80, 100, 127, 150, 200, 255}; // 16
+int SMOOTH_WAITS[] {0, 2, 5, 8, 15, 50, 100, 200, 500, 1000}; // 10
+int DELAY_WAITS[] = {0, 500, 1000, 2000, 3000, 4000, 5000, 6000}; // 8
+int GLOBAL_BRIGHT; // global brightness for leds
+
+int L_BRIGHT; 
+int R_BRIGHT;
+
+int SENSOR_STATES[15];
+int IR_SENSOR_FIX_STATES[15] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
+void setup() {
+  //DEBUG MODE
+  #ifdef DEBUG
+  Serial.begin(9600);
+  #endif
+
+  L_STRIP.begin();  // This initializes the NeoPixel library.
+  R_STRIP.begin();  // This initializes the NeoPixel library.
+}
+ 
+void loop() {
+  
+  onAllPixelsStatic(50000);
+  
+  L_STRIP.setBrightness(BRIGHT[2]); 
+  R_STRIP.setBrightness(BRIGHT[2]); 
+
+  readSensors03and14(); 
+  
+  /*
+  // ======= monitor ========================
+  Serial.print("IR sensor 03: ");
+  Serial.print(SENSOR_STATES[2]);
+  Serial.print(" ");
+  Serial.println(IR_SENSOR_FIX_STATES[2]);
+
+  Serial.print("IR sensor 14: ");
+  Serial.print(SENSOR_STATES[13]);
+  Serial.print(" ");
+  Serial.println(IR_SENSOR_FIX_STATES[13]);
+  Serial.println("---------------");
+  // ======= end monitor ========================
+  */
+  
+  //RunningLights(0xff,0,0, 50);        // red
+  //RunningLights(0xff,0xff,0xff, 50);  // white
+  //RunningLights(0,0,0xff, 50);        // blue
+
+//IR_SENSOR_FIX_STATES[2] = 0;
+//IR_SENSOR_FIX_STATES[13] = 0;
+
+  if (IR_SENSOR_FIX_STATES[2]<1) {
+    //L_STRIP.setBrightness(BRIGHT[5]); 
+    //R_STRIP.setBrightness(BRIGHT[5]); 
+    RunningLights_up_01(0xff,0xff,0xff, 0);  // white
+  } 
+  
+  if (IR_SENSOR_FIX_STATES[13]<1) {
+    //L_STRIP.setBrightness(BRIGHT[5]); 
+    //R_STRIP.setBrightness(BRIGHT[5]);
+    RunningLights_down_01(0xff,0xff,0xff, 0);  // white
+  } 
+
+} // end void loop()
+
+// LEDStrip Effect – Running Lights (up)
+void RunningLights_up_01(byte red, byte green, byte blue, int WaveDelay) {
+  int Position=R_STRIP.numPixels()*1;
+  L_STRIP.setBrightness(BRIGHT[4]); 
+  R_STRIP.setBrightness(BRIGHT[4]);
+ 
+  for(int j=R_STRIP.numPixels(); j>=0; j--) {
+      Position--; // = 0; //Position + Rate;
+      for(int i=R_STRIP.numPixels(); i>=0; i--) {
+        // sine wave, 3 offset waves make a rainbow!
+        //float level = sin(i+Position) * 127 + 128;
+        //setPixel(i,level,0,0);
+        //float level = sin(i+Position) * 127 + 128;
+        setPixel(i,((sin(i+Position) * 127 + 128)/255)*red,
+                   ((sin(i+Position) * 127 + 128)/255)*green,
+                   ((sin(i+Position) * 127 + 128)/255)*blue);
+      }
+      showStrip();
+      delay(WaveDelay);
+  }
+}
+
+// LEDStrip Effect – Running Lights (down)
+void RunningLights_down_01(byte red, byte green, byte blue, int WaveDelay) {
+  int Position=0;
+  L_STRIP.setBrightness(BRIGHT[4]); 
+  R_STRIP.setBrightness(BRIGHT[4]);
+  
+  for(int j=0; j<R_STRIP.numPixels(); j++) {
+      Position++; // = 0; //Position + Rate;
+      for(int i=0; i<R_STRIP.numPixels(); i++) {
+        // sine wave, 3 offset waves make a rainbow!
+        //float level = sin(i+Position) * 127 + 128;
+        //setPixel(i,level,0,0);
+        //float level = sin(i+Position) * 127 + 128;
+        setPixel(i,((sin(i+Position) * 127 + 128)/255)*red,
+                   ((sin(i+Position) * 127 + 128)/255)*green,
+                   ((sin(i+Position) * 127 + 128)/255)*blue);
+      }
+      showStrip();
+      delay(WaveDelay);
+  }
+}
+
+static void readSensors03and14() {
+  int accidentTrigSensor03, accidentTrigSensor14 = 0; // counters init
+
+  // read 3 times and triggers to 0 state if all three iterates triggers to 0 
+  for(int i = 0; i < 3; i++) {
+      SENSOR_STATES[2] = digitalRead(IR_SENSORS[2]);
+      SENSOR_STATES[13] = digitalRead(IR_SENSORS[13]);
+
+      if(SENSOR_STATES[2]==0) {
+        accidentTrigSensor03++;
+      }
+      if(SENSOR_STATES[13]==0) {
+        accidentTrigSensor14++;
+      }
+  }
+  
+  if(accidentTrigSensor03 == 3) {
+    IR_SENSOR_FIX_STATES[2] = 0;
+  } else IR_SENSOR_FIX_STATES[2] = 1;
+  if(accidentTrigSensor14 == 3) {
+    IR_SENSOR_FIX_STATES[13] = 0;
+  } else IR_SENSOR_FIX_STATES[13] = 1;
+
+  // ======= monitor ========================
+  Serial.print("IR sensor 03: ");
+  Serial.print(SENSOR_STATES[2]);
+  Serial.print(" ");
+  Serial.print(IR_SENSOR_FIX_STATES[2]);
+  Serial.print(" ");
+  Serial.println(accidentTrigSensor03);
+ 
+  Serial.print("IR sensor 14: ");
+  Serial.print(SENSOR_STATES[13]);
+  Serial.print(" ");
+  Serial.print(IR_SENSOR_FIX_STATES[13]);
+  Serial.print(" ");
+  Serial.println(accidentTrigSensor14);
+  Serial.println("---------------");
+  // ======= end monitor ========================
+  
+}
+
+static void erase_all() {
+  for(uint16_t i=0; i<R_STRIP.numPixels() + 4; i++) {
+      R_STRIP.setPixelColor(i, 0); // Draw new pixel
+  } 
+
+  for(uint16_t i=0; i<L_STRIP.numPixels() + 4; i++) {
+      L_STRIP.setPixelColor(i, 0); // Draw new pixel
+  } 
+}
+
+// ON all pixel static
+static void onAllPixelsStatic(uint32_t c) {
+  for(uint16_t i=0; i<(R_STRIP.numPixels()); i++) {
+    L_STRIP.setPixelColor(i, c); // Draw new pixel 
+    R_STRIP.setPixelColor(i, c); // Draw new pixel 
+    L_STRIP.show();
+    R_STRIP.show();
+  } 
+}
+
+void setPixel(int Pixel, byte red, byte green, byte blue) {
+ #ifdef ADAFRUIT_NEOPIXEL_H 
+   // NeoPixel
+  L_STRIP.setPixelColor(Pixel, L_STRIP.Color(red, green, blue));
+  R_STRIP.setPixelColor(Pixel, R_STRIP.Color(red, green, blue));
+ #endif
+ #ifndef ADAFRUIT_NEOPIXEL_H 
+   // FastLED
+   leds[Pixel].r = red;
+   leds[Pixel].g = green;
+   leds[Pixel].b = blue;
+ #endif
+}
+
+void showStrip() {
+ #ifdef ADAFRUIT_NEOPIXEL_H 
+   // NeoPixel
+  L_STRIP.show();
+  R_STRIP.show();
+ #endif
+ #ifndef ADAFRUIT_NEOPIXEL_H
+   // FastLED
+   FastLED.show();
+ #endif
+}
